@@ -57,8 +57,17 @@ crosstoolng(
 filegroup(
     name = "avr_fg",
     srcs = [
-        "avr-toolchain",
+        ":avr-gcc",
+        ":avr-toolchain",
     ],
     tags = ["manual"],
+    visibility = ["//visibility:public"],
+)
+
+genrule(
+    name = "avr-gcc",
+    srcs = [":avr-toolchain"],
+    outs = ["avr-gcc.bin"],
+    cmd = "cp $(location :avr-toolchain)/bin/avr-gcc $@",
     visibility = ["//visibility:public"],
 )

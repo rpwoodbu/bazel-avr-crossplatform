@@ -5,10 +5,12 @@ Macros for setting up AVR C/C++ toolchains
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
 load(
     "@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl",
+    "action_config",
     "artifact_name_pattern",
     "feature",
     "flag_group",
     "flag_set",
+    "tool",
     "tool_path",
     "with_feature_set",
 )
@@ -58,10 +60,11 @@ def _get_tool_paths(base):
             name = "cpp",
             path = base + "cpp",
         ),
-        tool_path(
-            name = "gcc",
-            path = base + "gcc",
-        ),
+        #tool_path(
+        #    name = "gcc",
+        #    path = base + "gcc",
+        #    #path = "toolchains/gcc.sh",
+        #),
         tool_path(
             name = "gcov",
             path = base + "gcov",
@@ -93,6 +96,7 @@ def _impl(ctx):
     # To workaround this we get the relative file path of the label (using ctx.files....path) and use this as the path 'relative to the cc_toolchain's package'. Unfortunately when using paths 'relative to the cc_toolchain's package' Bazel prefixes the path with the source path relative to the workspace root.
     # this means that you can only add toolchains from the root of the workspace :-(
     tool_paths = _get_tool_paths(ctx.files.toolchain_files[0].path + "/bin/avr-")
+    #tool_paths = _get_tool_paths("toolchains/crosscompilers/avr-toolchain/bin/avr-")
 
     features = [
         feature(
@@ -204,6 +208,7 @@ def _impl(ctx):
         ),
     ]
 
+    print(ctx.attr.toolchain_files)
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,
         features = features,
@@ -215,7 +220,23 @@ def _impl(ctx):
         compiler = "gcc",
         abi_version = "unknown",
         abi_libc_version = "unknown",
-        tool_paths = tool_paths,
+        #tool_paths = tool_paths,
+        action_configs = [
+            action_config(
+                action_name = ACTION_NAMES.cpp_compile,
+                tools = [
+                    # OK, so this "works" insofar as the tool is accessible
+                    # cross-repo. But the way I'm doing it doesn't work: I'm
+                    # just using a genrule to copy the file out of the
+                    # TreeArtifact, which puts the file in the wrong place, and
+                    # it can't find the other files. I need to export these
+                    # tools directly from the rule that makes them. This is
+                    # complicated due to a Bazel caching bug with exporting
+                    # both regular files and an "overlapping" TreeArtifact.
+                    tool(tool = ctx.file.gcc),
+                ],
+            ),
+        ],
     )
 
 cc_toolchain_config = rule(
@@ -224,6 +245,7 @@ cc_toolchain_config = rule(
         "toolchain_files": attr.label(cfg = "exec"),
         "mmcu": attr.string(mandatory = True),
         "freq": attr.int(mandatory = True),
+        "gcc": attr.label(allow_single_file = True, cfg = "exec"),
     },
     provides = [CcToolchainConfigInfo],
 )
@@ -246,6 +268,7 @@ def add_avr_cc_toolchain(name, mmcu, freq):
         toolchain_files = toolchain_files,
         mmcu = mmcu,
         freq = freq,
+        gcc = "//toolchains/crosscompilers:avr-gcc",
     )
 
     native.cc_toolchain(
